@@ -262,15 +262,3 @@ gcc -O2 -o /usr/local/bin/rant rant.c -lm
 ```
 
 Build dependencies: `gcc`, `jq`, `bc`, `numactl`
-
-## Typical Results
-
-Baseline on Sapphire Rapids + ConnectX-7 + PREEMPT\_RT (8-hour test, 1.16 billion packets):
-
-| Metric | Client (RTT) | Server (response) |
-|--------|-------------|-------------------|
-| p50 | 7 us | 1 us |
-| p99 | 8 us | 2 us |
-| p99.9 | 9 us | 3 us |
-| MAX | 18-43 us | 11 us |
-| Throughput | ~40K-80K pkt/s | — |
