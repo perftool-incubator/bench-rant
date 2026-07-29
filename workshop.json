@@ -22,7 +22,8 @@
                     "jq",
                     "bc",
                     "numactl",
-                    "gcc"
+                    "gcc",
+                    "stress-ng"
                 ]
             }
         },

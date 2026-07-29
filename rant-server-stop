@@ -29,4 +29,21 @@ if [ -e /proc/$pid ]; then
 fi
 
 date +%s.%N >rant-stop.txt
+
+if [ -e stress-ng.pids ]; then
+    echo "=== stopping stress-ng ==="
+    while read spid; do
+        if [ -e /proc/$spid ]; then
+            kill -TERM $spid 2>/dev/null
+        fi
+    done < stress-ng.pids
+    sleep 1
+    while read spid; do
+        if [ -e /proc/$spid ]; then
+            kill -9 $spid 2>/dev/null
+        fi
+    done < stress-ng.pids
+    echo "stress-ng stopped"
+fi
+
 echo "rant server stopped"
