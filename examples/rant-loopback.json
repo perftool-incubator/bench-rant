@@ -1,0 +1,80 @@
+{
+    "benchmarks": [
+        {
+            "name": "rant",
+            "ids": "1",
+            "mv-params": {
+                "global-options": [
+                    {
+                        "name": "common-client",
+                        "params": [
+                            { "arg": "duration", "vals": ["60"], "role": "client" },
+                            { "arg": "rant-bin", "vals": ["/usr/local/bin/rant"], "role": "client" },
+                            { "arg": "busy-poll-us", "vals": ["50"], "role": "client" },
+                            { "arg": "busy-poll-budget", "vals": ["1"], "role": "client" },
+                            { "arg": "prefer-busy-poll", "vals": ["1"], "role": "client" },
+                            { "arg": "warmup", "vals": ["10000"], "role": "client" },
+                            { "arg": "histogram", "vals": ["1"], "role": "client" },
+                            { "arg": "sched-priority", "vals": ["2"], "role": "client" }
+                        ]
+                    },
+                    {
+                        "name": "common-server",
+                        "params": [
+                            { "arg": "rant-bin", "vals": ["/usr/local/bin/rant"], "role": "server" },
+                            { "arg": "busy-poll-us", "vals": ["50"], "role": "server" },
+                            { "arg": "busy-poll-budget", "vals": ["1"], "role": "server" },
+                            { "arg": "prefer-busy-poll", "vals": ["1"], "role": "server" },
+                            { "arg": "warmup", "vals": ["10000"], "role": "server" },
+                            { "arg": "histogram", "vals": ["1"], "role": "server" },
+                            { "arg": "sched-priority", "vals": ["2"], "role": "server" },
+                            { "arg": "no-tx-ts", "vals": ["1"], "role": "server" }
+                        ]
+                    }
+                ],
+                "sets": [
+                    {
+                        "include": ["common-client", "common-server"],
+                        "params": [
+                            { "arg": "interface", "vals": ["CHANGEME_CLIENT_IFACE"], "role": "client" },
+                            { "arg": "interface", "vals": ["CHANGEME_SERVER_IFACE"], "role": "server" },
+                            { "arg": "cpu", "vals": ["CHANGEME_CLIENT_CPU"], "role": "client" },
+                            { "arg": "cpu", "vals": ["CHANGEME_SERVER_CPU"], "role": "server" },
+                            { "arg": "namespace", "vals": ["CHANGEME_CLIENT_NS"], "role": "client" },
+                            { "arg": "namespace", "vals": ["CHANGEME_SERVER_NS"], "role": "server" },
+                            { "arg": "server-address", "vals": ["CHANGEME_SERVER_IP"], "role": "client" }
+                        ]
+                    }
+                ]
+            }
+        }
+    ],
+    "tags": {
+        "benchmark": "rant",
+        "topology": "loopback",
+        "duration": "60s"
+    },
+    "tool-params": [],
+    "endpoints": [
+        {
+            "type": "remotehosts",
+            "settings": {
+                "osruntime": "chroot"
+            },
+            "remotes": [
+                {
+                    "engines": [
+                        { "role": "client", "ids": "1" },
+                        { "role": "server", "ids": "1" }
+                    ],
+                    "config": {
+                        "host": "CHANGEME_HOSTNAME",
+                        "settings": {
+                            "cpu-partitioning": false
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
