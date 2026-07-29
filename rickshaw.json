@@ -1,0 +1,29 @@
+{
+    "rickshaw-benchmark": {
+        "schema": {
+            "version": "2020.05.18"
+        }
+    },
+    "benchmark": "rant",
+    "controller": {
+        "post-script": "%bench-dir%rant-post-process"
+    },
+    "client": {
+        "files-from-controller": [
+            { "src": "%bench-dir%/rant-base", "dest": "/usr/bin/" },
+            { "src": "%bench-dir%/rant-get-runtime", "dest": "/usr/bin/" },
+            { "src": "%bench-dir%/rant-client", "dest": "/usr/bin/" }
+        ],
+        "runtime": "rant-get-runtime",
+        "start": "rant-client"
+    },
+    "server": {
+        "files-from-controller": [
+            { "src": "%bench-dir%/rant-base", "dest": "/usr/bin/" },
+            { "src": "%bench-dir%/rant-server-start", "dest": "/usr/bin/" },
+            { "src": "%bench-dir%/rant-server-stop", "dest": "/usr/bin/" }
+        ],
+        "start": "rant-server-start",
+        "stop": "rant-server-stop"
+    }
+}

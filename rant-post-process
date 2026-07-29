@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
+
+import sys
+import os
+import re
+import json
+import math
+from pathlib import Path
+
+toolbox_home = os.environ.get('TOOLBOX_HOME')
+if toolbox_home is None:
+    print("ERROR: This script requires TOOLBOX_HOME to be set", file=sys.stderr)
+    sys.exit(1)
+sys.path.append(os.path.join(toolbox_home, 'python'))
+
+from toolbox.metrics import log_sample, finish_samples
+
+
+def parse_rant_output(filepath):
+    """Parse rant stdout for statistics and histogram data."""
+    results = {
+        'duration': None,
+        'min_ns': None,
+        'max_ns': None,
+        'avg_ns': None,
+        'total_samples': None,
+        'percentiles': {},
+    }
+
+    try:
+        with open(filepath, 'r') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return None
+
+    # Parse duration: "Test is complete. Duration: 600.12 s"
+    m = re.search(r'Test is complete\.\s+Duration:\s+([\d.]+)\s*s', content)
+    if m:
+        results['duration'] = float(m.group(1))
+
+    # Parse stats: "MIN: 6875 ns | MAX: 32989 ns | AVG: 9911 ns | Total Samples: 28546206"
+    m = re.search(
+        r'MIN:\s+(\d+)\s+ns\s*\|\s*MAX:\s+(\d+)\s+ns\s*\|\s*AVG:\s+(\d+)\s+ns\s*\|\s*Total Samples:\s+(\d+)',
+        content
+    )
+    if m:
+        results['min_ns'] = int(m.group(1))
+        results['max_ns'] = int(m.group(2))
+        results['avg_ns'] = int(m.group(3))
+        results['total_samples'] = int(m.group(4))
+
+    # Parse histogram percentiles
+    # "    50th    :  9 (Median)"
+    # "    99.99th :  18"
+    for m in re.finditer(r'^\s+([\d.]+)th\s*:\s+(\d+)', content, re.MULTILINE):
+        pct_label = m.group(1)
+        value_us = int(m.group(2))
+        results['percentiles'][pct_label] = value_us
+
+    # Parse histogram min/max/avg in microseconds
+    # "  Minimum   :  6.88 us (#12345)"
+    m = re.search(r'Minimum\s*:\s+([\d.]+)\s*us', content)
+    if m:
+        results['hist_min_us'] = float(m.group(1))
+    m = re.search(r'Maximum\s*:\s+([\d.]+)\s*us', content)
+    if m:
+        results['hist_max_us'] = float(m.group(1))
+    m = re.search(r'Average\s*:\s+([\d.]+)\s*us', content)
+    if m:
+        results['hist_avg_us'] = float(m.group(1))
+
+    return results
+
+
+def read_timestamp(filepath):
+    """Read a timestamp file (epoch seconds with nanoseconds)."""
+    try:
+        with open(filepath, 'r') as f:
+            return float(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def process_role(role_dir, role):
+    """Process output from a single role (client or server)."""
+    result_file = os.path.join(role_dir, 'rant-%s-result.txt' % role)
+    start_file = os.path.join(role_dir, 'rant-start.txt')
+    stop_file = os.path.join(role_dir, 'rant-stop.txt')
+
+    results = parse_rant_output(result_file)
+    if results is None:
+        print("WARNING: No result file found at %s" % result_file, file=sys.stderr)
+        return False
+
+    if results.get('total_samples') is not None and results['total_samples'] == 0:
+        print("INFO: %s has 0 samples, skipping metrics" % role, file=sys.stderr)
+        return True
+
+    begin_ts = read_timestamp(start_file)
+    end_ts = read_timestamp(stop_file)
+
+    if begin_ts is None or end_ts is None:
+        print("WARNING: Missing start/stop timestamps in %s" % role_dir, file=sys.stderr)
+        if results.get('duration'):
+            if end_ts:
+                begin_ts = end_ts - results['duration']
+            elif begin_ts:
+                end_ts = begin_ts + results['duration']
+            else:
+                return False
+
+    begin_ms = int(begin_ts * 1000)
+    end_ms = int(end_ts * 1000)
+
+    metric_type = 'round-trip-usec' if role == 'client' else 'response-usec'
+
+    # Log percentile metrics
+    for pct_label, value_us in results.get('percentiles', {}).items():
+        desc = {
+            'source': 'rant',
+            'class': 'throughput',
+            'type': '%s-p%s' % (metric_type, pct_label)
+        }
+        names = {'role': role}
+        sample = {'begin': begin_ms, 'end': end_ms, 'value': float(value_us)}
+        log_sample('0', desc, names, sample)
+
+    # Log min/max/avg from statistics line (convert ns to us)
+    if results.get('min_ns') is not None:
+        for stat_name, stat_val in [('min', results['min_ns']),
+                                     ('max', results['max_ns']),
+                                     ('avg', results['avg_ns'])]:
+            desc = {
+                'source': 'rant',
+                'class': 'throughput',
+                'type': '%s-%s' % (metric_type, stat_name)
+            }
+            names = {'role': role}
+            sample = {'begin': begin_ms, 'end': end_ms, 'value': stat_val / 1000.0}
+            log_sample('0', desc, names, sample)
+
+    # Log throughput (packets per second)
+    if results.get('total_samples') and results.get('duration') and results['duration'] > 0:
+        pps = results['total_samples'] / results['duration']
+        desc = {
+            'source': 'rant',
+            'class': 'throughput',
+            'type': 'packets-sec'
+        }
+        names = {'role': role}
+        sample = {'begin': begin_ms, 'end': end_ms, 'value': pps}
+        log_sample('0', desc, names, sample)
+
+    return True
+
+
+def main():
+    primary_metric = 'round-trip-usec-max'
+    processed = False
+
+    # Look for client and server result directories
+    for role in ['client', 'server']:
+        role_base = role
+        if os.path.isdir(role_base):
+            for engine_id in sorted(os.listdir(role_base)):
+                engine_dir = os.path.join(role_base, engine_id)
+                if os.path.isdir(engine_dir):
+                    if process_role(engine_dir, role):
+                        processed = True
+
+    # Also check current directory (in case post-process runs inside engine dir)
+    if not processed:
+        for role in ['client', 'server']:
+            result_file = 'rant-%s-result.txt' % role
+            if os.path.exists(result_file):
+                if process_role('.', role):
+                    processed = True
+
+    if not processed:
+        print("ERROR: No rant result files found", file=sys.stderr)
+        return 1
+
+    metric_file_name = finish_samples()
+
+    iter_sample = {
+        'rickshaw-bench-metric': {
+            'schema': {
+                'version': '2021.04.12'
+            }
+        },
+        'benchmark': 'rant',
+        'primary-period': 'measurement',
+        'primary-metric': primary_metric,
+        'periods': [
+            {
+                'name': 'measurement',
+                'metric-files': [metric_file_name]
+            }
+        ]
+    }
+
+    os.makedirs('postprocess', exist_ok=True)
+    with open('postprocess/post-process-data.json', 'w') as f:
+        json.dump(iter_sample, f, indent=4)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

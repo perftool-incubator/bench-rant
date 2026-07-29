@@ -1,0 +1,77 @@
+{
+    "presets": {
+        "defaults": [
+            { "arg": "duration", "vals": ["60"] },
+            { "arg": "rant-bin", "vals": ["/usr/local/bin/rant"] },
+            { "arg": "sched-priority", "vals": ["2"] },
+            { "arg": "busy-poll-us", "vals": ["50"] },
+            { "arg": "busy-poll-budget", "vals": ["1"] },
+            { "arg": "prefer-busy-poll", "vals": ["1"] },
+            { "arg": "warmup", "vals": ["10000"] },
+            { "arg": "histogram", "vals": ["1"] },
+            { "arg": "no-tx-ts", "vals": ["1"] },
+            { "arg": "fast-path", "vals": ["0"] },
+            { "arg": "threaded", "vals": ["0"] },
+            { "arg": "threshold", "vals": ["0"] },
+            { "arg": "log-threshold", "vals": ["0"] },
+            { "arg": "continue-threshold", "vals": ["0"] },
+            { "arg": "trace-marker", "vals": ["0"] },
+            { "arg": "snapshot", "vals": ["0"] },
+            { "arg": "pmc", "vals": ["0"] },
+            { "arg": "hugepages", "vals": ["0"] },
+            { "arg": "no-hw-ts", "vals": ["0"] },
+            { "arg": "verbose", "vals": ["0"] },
+            { "arg": "overflow", "vals": ["100"] },
+            { "arg": "bucket-size", "vals": ["1"] }
+        ],
+        "baseline": [
+            { "arg": "duration", "vals": ["300"] },
+            { "arg": "busy-poll-us", "vals": ["50"] },
+            { "arg": "busy-poll-budget", "vals": ["1"] },
+            { "arg": "prefer-busy-poll", "vals": ["1"] },
+            { "arg": "warmup", "vals": ["10000"] },
+            { "arg": "histogram", "vals": ["1"] },
+            { "arg": "no-tx-ts", "vals": ["1"] },
+            { "arg": "sched-priority", "vals": ["2"] }
+        ]
+    },
+    "validations": {
+        "positive_integer": {
+            "description": "a whole number greater than 0",
+            "args": ["duration", "warmup", "overflow", "bucket-size"],
+            "vals": "[1-9][0-9]*"
+        },
+        "non_negative_integer": {
+            "description": "a whole number >= 0",
+            "args": ["busy-poll-us", "busy-poll-budget", "sched-priority", "threshold", "log-threshold"],
+            "vals": "0|[1-9][0-9]*"
+        },
+        "boolean_flag": {
+            "description": "0 or 1",
+            "args": ["prefer-busy-poll", "histogram", "no-tx-ts", "fast-path", "threaded",
+                     "continue-threshold", "trace-marker", "snapshot", "pmc", "hugepages",
+                     "no-hw-ts", "verbose"],
+            "vals": "^[01]$"
+        },
+        "interface_name": {
+            "description": "a network interface name",
+            "args": ["interface"],
+            "vals": ".+"
+        },
+        "ip_address": {
+            "description": "an IP address",
+            "args": ["server-address"],
+            "vals": ".+"
+        },
+        "file_path": {
+            "description": "a file path",
+            "args": ["rant-bin", "log-file"],
+            "vals": ".+"
+        },
+        "string_value": {
+            "description": "a non-empty string",
+            "args": ["cpu", "namespace", "numa-node"],
+            "vals": ".+"
+        }
+    }
+}

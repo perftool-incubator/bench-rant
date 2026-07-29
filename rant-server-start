@@ -1,0 +1,219 @@
+#!/bin/bash
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=bash
+
+exec >rant-server-stderrout.txt
+exec 2>&1
+
+. /usr/bin/rant-base || (echo "/usr/bin/rant-base not found"; exit 1)
+
+dump_runtime
+validate_label
+validate_sw_prereqs jq getopt
+
+# Defaults
+rant_bin="./rant"
+interface=""
+cpu=""
+namespace=""
+numa_node=""
+sched_priority="2"
+busy_poll_us="50"
+busy_poll_budget="1"
+prefer_busy_poll="1"
+warmup="10000"
+histogram="1"
+no_tx_ts="1"
+fast_path="0"
+threaded="0"
+threshold="0"
+log_threshold="0"
+continue_threshold="0"
+trace_marker="0"
+snapshot="0"
+pmc="0"
+hugepages="0"
+no_hw_ts="0"
+verbose="0"
+log_file=""
+overflow="100"
+bucket_size="1"
+
+longopts="rant-bin:,interface:,cpu:,namespace:,numa-node:,sched-priority:,"
+longopts+="busy-poll-us:,busy-poll-budget:,prefer-busy-poll:,warmup:,"
+longopts+="histogram:,no-tx-ts:,fast-path:,threaded:,threshold:,"
+longopts+="log-threshold:,continue-threshold:,trace-marker:,snapshot:,"
+longopts+="pmc:,hugepages:,no-hw-ts:,verbose:,log-file:,"
+longopts+="overflow:,bucket-size:,"
+# Client-only params to silently skip
+longopts+="duration:,server-address:"
+
+opts=$(getopt -q -o "" --longoptions "$longopts" -n "getopt.sh" -- "$@")
+eval set -- "$opts"
+while true; do
+    case "$1" in
+        --rant-bin)          shift; rant_bin=$1;          shift ;;
+        --interface)         shift; interface=$1;         shift ;;
+        --cpu)               shift; cpu=$1;               shift ;;
+        --namespace)         shift; namespace=$1;         shift ;;
+        --numa-node)         shift; numa_node=$1;         shift ;;
+        --sched-priority)    shift; sched_priority=$1;    shift ;;
+        --busy-poll-us)      shift; busy_poll_us=$1;      shift ;;
+        --busy-poll-budget)  shift; busy_poll_budget=$1;  shift ;;
+        --prefer-busy-poll)  shift; prefer_busy_poll=$1;  shift ;;
+        --warmup)            shift; warmup=$1;            shift ;;
+        --histogram)         shift; histogram=$1;         shift ;;
+        --no-tx-ts)          shift; no_tx_ts=$1;          shift ;;
+        --fast-path)         shift; fast_path=$1;         shift ;;
+        --threaded)          shift; threaded=$1;          shift ;;
+        --threshold)         shift; threshold=$1;         shift ;;
+        --log-threshold)     shift; log_threshold=$1;     shift ;;
+        --continue-threshold) shift; continue_threshold=$1; shift ;;
+        --trace-marker)      shift; trace_marker=$1;      shift ;;
+        --snapshot)          shift; snapshot=$1;           shift ;;
+        --pmc)               shift; pmc=$1;               shift ;;
+        --hugepages)         shift; hugepages=$1;         shift ;;
+        --no-hw-ts)          shift; no_hw_ts=$1;          shift ;;
+        --verbose)           shift; verbose=$1;           shift ;;
+        --log-file)          shift; log_file=$1;          shift ;;
+        --overflow)          shift; overflow=$1;           shift ;;
+        --bucket-size)       shift; bucket_size=$1;       shift ;;
+        --duration|--server-address)
+            shift; shift ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$interface" ]; then
+    exit_error "interface is required (--interface)"
+fi
+
+# Determine server IP from interface inside namespace for service discovery
+server_ip=""
+if [ -n "$namespace" ]; then
+    server_ip=$(nsenter --net=/var/run/netns/$namespace ip -j addr show $interface \
+        | jq -r '.[0].addr_info[] | select(.family == "inet") | .local' 2>/dev/null)
+else
+    server_ip=$(ip -j addr show $interface \
+        | jq -r '.[0].addr_info[] | select(.family == "inet") | .local' 2>/dev/null)
+fi
+
+if [ -n "$server_ip" ]; then
+    echo "Server IP: $server_ip"
+    mkdir -p msgs/tx
+    echo "{\"svc\":{\"ip\":\"$server_ip\",\"ports\":[12345]}}" >msgs/tx/svc
+else
+    echo "WARNING: Could not determine server IP from interface $interface"
+fi
+
+# Build rant command-line arguments (server mode: no -a, no -d)
+rant_args="-i $interface"
+
+if [ "$busy_poll_us" -gt 0 ] 2>/dev/null; then
+    rant_args="$rant_args -p $busy_poll_us"
+fi
+if [ "$busy_poll_budget" -gt 0 ] 2>/dev/null; then
+    rant_args="$rant_args -B $busy_poll_budget"
+fi
+if [ "$prefer_busy_poll" = "1" ]; then
+    rant_args="$rant_args -P"
+fi
+if [ "$warmup" -gt 0 ] 2>/dev/null; then
+    rant_args="$rant_args -w $warmup"
+fi
+if [ "$histogram" = "1" ]; then
+    rant_args="$rant_args -H"
+fi
+if [ "$no_tx_ts" = "1" ]; then
+    rant_args="$rant_args -N"
+fi
+if [ "$fast_path" = "1" ]; then
+    rant_args="$rant_args -F"
+fi
+if [ "$threaded" = "1" ]; then
+    rant_args="$rant_args -2"
+fi
+if [ "$threshold" -gt 0 ] 2>/dev/null; then
+    rant_args="$rant_args -t $threshold"
+fi
+if [ "$log_threshold" -gt 0 ] 2>/dev/null; then
+    rant_args="$rant_args -L $log_threshold"
+fi
+if [ "$continue_threshold" = "1" ]; then
+    rant_args="$rant_args -C"
+fi
+if [ "$trace_marker" = "1" ]; then
+    rant_args="$rant_args -T"
+fi
+if [ "$snapshot" = "1" ]; then
+    rant_args="$rant_args -S"
+fi
+if [ "$pmc" = "1" ]; then
+    rant_args="$rant_args -M"
+fi
+if [ "$hugepages" = "1" ]; then
+    rant_args="$rant_args -G"
+fi
+if [ "$no_hw_ts" = "1" ]; then
+    rant_args="$rant_args -R"
+fi
+if [ "$verbose" = "1" ]; then
+    rant_args="$rant_args -v"
+fi
+if [ -n "$log_file" ]; then
+    rant_args="$rant_args -l rant-server-log.txt"
+fi
+if [ "$overflow" != "100" ]; then
+    rant_args="$rant_args -o $overflow"
+fi
+if [ "$bucket_size" != "1" ]; then
+    rant_args="$rant_args -b $bucket_size"
+fi
+
+# Build command prefix for CPU pinning, scheduling, NUMA, and namespace
+cmd_prefix=""
+if [ -n "$numa_node" ]; then
+    cmd_prefix="numactl --membind=$numa_node"
+fi
+if [ -n "$namespace" ]; then
+    cmd_prefix="$cmd_prefix nsenter --net=/var/run/netns/$namespace"
+fi
+if [ -n "$sched_priority" ] && [ "$sched_priority" -gt 0 ] 2>/dev/null; then
+    cmd_prefix="$cmd_prefix chrt -f $sched_priority"
+fi
+if [ -n "$cpu" ]; then
+    cmd_prefix="$cmd_prefix taskset -c $cpu"
+fi
+
+echo "=== rant server configuration ==="
+echo "  rant binary:      $rant_bin"
+echo "  interface:        $interface"
+echo "  server IP:        ${server_ip:-unknown}"
+echo "  cpu:              ${cpu:-not pinned}"
+echo "  namespace:        ${namespace:-none}"
+echo "  numa node:        ${numa_node:-not bound}"
+echo "  sched priority:   FIFO $sched_priority"
+echo "  rant args:        $rant_args"
+echo "  command prefix:   ${cmd_prefix:-none}"
+echo "================================="
+
+date +%s.%N >rant-start.txt
+$cmd_prefix $rant_bin $rant_args >rant-server-result.txt 2>&1 &
+pid=$!
+echo $pid >rant-server.pid
+echo "rant server started with pid $pid"
+
+sleep 2
+if [ ! -e /proc/$pid ]; then
+    echo "rant server failed to start:"
+    cat rant-server-result.txt
+    exit_error "rant server process died"
+fi
+
+echo "rant server is running"
+exit 0

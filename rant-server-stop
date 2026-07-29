@@ -1,0 +1,32 @@
+#!/bin/bash
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=bash
+
+exec >rant-server-stop-stderrout.txt
+exec 2>&1
+
+if [ ! -e rant-server.pid ]; then
+    echo "rant-server.pid not found"
+    exit 1
+fi
+
+pid=$(cat rant-server.pid)
+echo "Stopping rant server pid $pid"
+
+# SIGTERM triggers clean shutdown with histogram/stats output to stdout
+if [ -e /proc/$pid ]; then
+    kill -TERM $pid
+    for i in $(seq 1 10); do
+        if [ ! -e /proc/$pid ]; then
+            date +%s.%N >rant-stop.txt
+            echo "rant server stopped cleanly"
+            exit 0
+        fi
+        sleep 1
+    done
+    echo "rant server did not stop after SIGTERM, sending SIGKILL"
+    kill -9 $pid
+    sleep 1
+fi
+
+date +%s.%N >rant-stop.txt
+echo "rant server stopped"
