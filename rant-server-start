@@ -37,6 +37,10 @@ verbose="0"
 log_file=""
 overflow="100"
 bucket_size="1"
+stress_type=""
+stress_cpus=""
+stress_workers="0"
+stress_membind=""
 
 longopts="rant-bin:,interface:,cpu:,namespace:,numa-node:,sched-priority:,"
 longopts+="busy-poll-us:,busy-poll-budget:,prefer-busy-poll:,warmup:,"
@@ -44,6 +48,7 @@ longopts+="histogram:,no-tx-ts:,fast-path:,threaded:,threshold:,"
 longopts+="log-threshold:,continue-threshold:,trace-marker:,snapshot:,"
 longopts+="pmc:,hugepages:,no-hw-ts:,verbose:,log-file:,"
 longopts+="overflow:,bucket-size:,"
+longopts+="stress-type:,stress-cpus:,stress-workers:,stress-membind:,"
 # Client-only params to silently skip
 longopts+="duration:,server-address:"
 
@@ -77,6 +82,10 @@ while true; do
         --log-file)          shift; log_file=$1;          shift ;;
         --overflow)          shift; overflow=$1;           shift ;;
         --bucket-size)       shift; bucket_size=$1;       shift ;;
+        --stress-type)       shift; stress_type=$1;       shift ;;
+        --stress-cpus)       shift; stress_cpus=$1;       shift ;;
+        --stress-workers)    shift; stress_workers=$1;    shift ;;
+        --stress-membind)    shift; stress_membind=$1;    shift ;;
         --duration|--server-address)
             shift; shift ;;
         --)
@@ -201,6 +210,37 @@ echo "  sched priority:   FIFO $sched_priority"
 echo "  rant args:        $rant_args"
 echo "  command prefix:   ${cmd_prefix:-none}"
 echo "================================="
+
+if [ -n "$stress_type" ] && [ "$stress_workers" -gt 0 ] 2>/dev/null && [ -n "$stress_cpus" ]; then
+    echo "=== starting stress-ng ==="
+    echo "  type:     $stress_type"
+    echo "  cpus:     $stress_cpus"
+    echo "  workers:  $stress_workers"
+    echo "  membind:  ${stress_membind:-none}"
+    IFS=',' read -ra STRESSORS <<< "$stress_type"
+    stress_prefix=""
+    if [ -n "$stress_membind" ]; then
+        stress_prefix="numactl --membind=$stress_membind"
+    fi
+    rm -f stress-ng.pids
+    for stressor in "${STRESSORS[@]}"; do
+        stress_args=""
+        case "$stressor" in
+            cache)   stress_args="--cache $stress_workers --cache-size 4M" ;;
+            cpu)     stress_args="--cpu $stress_workers --cpu-method all" ;;
+            memory)  stress_args="--vm $stress_workers --vm-bytes 512M" ;;
+            io)      stress_args="--io $stress_workers" ;;
+            fork)    stress_args="--fork $stress_workers" ;;
+            sched)   stress_args="--schedpolicy $stress_workers" ;;
+            *)       echo "WARNING: unknown stress type: $stressor"; continue ;;
+        esac
+        echo "  launching: $stress_prefix stress-ng $stress_args --taskset $stress_cpus --timeout 0"
+        $stress_prefix stress-ng $stress_args --taskset $stress_cpus --timeout 0 > stress-ng-${stressor}.log 2>&1 &
+        echo $! >> stress-ng.pids
+    done
+    sleep 3
+    echo "  stress-ng pids: $(cat stress-ng.pids | tr '\n' ' ')"
+fi
 
 date +%s.%N >rant-start.txt
 $cmd_prefix $rant_bin $rant_args >rant-server-result.txt 2>&1 &

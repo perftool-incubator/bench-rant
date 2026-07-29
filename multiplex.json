@@ -22,7 +22,11 @@
             { "arg": "no-hw-ts", "vals": ["0"] },
             { "arg": "verbose", "vals": ["0"] },
             { "arg": "overflow", "vals": ["100"] },
-            { "arg": "bucket-size", "vals": ["1"] }
+            { "arg": "bucket-size", "vals": ["1"] },
+            { "arg": "stress-type", "vals": [""] },
+            { "arg": "stress-cpus", "vals": [""] },
+            { "arg": "stress-workers", "vals": ["0"] },
+            { "arg": "stress-membind", "vals": [""] }
         ],
         "baseline": [
             { "arg": "duration", "vals": ["300"] },
@@ -43,7 +47,7 @@
         },
         "non_negative_integer": {
             "description": "a whole number >= 0",
-            "args": ["busy-poll-us", "busy-poll-budget", "sched-priority", "threshold", "log-threshold"],
+            "args": ["busy-poll-us", "busy-poll-budget", "sched-priority", "threshold", "log-threshold", "stress-workers"],
             "vals": "0|[1-9][0-9]*"
         },
         "boolean_flag": {
@@ -70,7 +74,7 @@
         },
         "string_value": {
             "description": "a non-empty string",
-            "args": ["cpu", "namespace", "numa-node"],
+            "args": ["cpu", "namespace", "numa-node", "stress-type", "stress-cpus", "stress-membind"],
             "vals": ".+"
         }
     }
