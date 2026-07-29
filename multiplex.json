@@ -23,10 +23,10 @@
             { "arg": "verbose", "vals": ["0"] },
             { "arg": "overflow", "vals": ["100"] },
             { "arg": "bucket-size", "vals": ["1"] },
-            { "arg": "stress-type", "vals": [""] },
-            { "arg": "stress-cpus", "vals": [""] },
+            { "arg": "stress-type", "vals": ["none"] },
+            { "arg": "stress-cpus", "vals": ["none"] },
             { "arg": "stress-workers", "vals": ["0"] },
-            { "arg": "stress-membind", "vals": [""] }
+            { "arg": "stress-membind", "vals": ["none"] }
         ],
         "baseline": [
             { "arg": "duration", "vals": ["300"] },

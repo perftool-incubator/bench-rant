@@ -211,15 +211,15 @@ echo "  rant args:        $rant_args"
 echo "  command prefix:   ${cmd_prefix:-none}"
 echo "================================="
 
-if [ -n "$stress_type" ] && [ "$stress_workers" -gt 0 ] 2>/dev/null && [ -n "$stress_cpus" ]; then
+if [ "$stress_type" != "none" ] && [ -n "$stress_type" ] && [ "$stress_workers" -gt 0 ] 2>/dev/null && [ "$stress_cpus" != "none" ] && [ -n "$stress_cpus" ]; then
     echo "=== starting stress-ng ==="
     echo "  type:     $stress_type"
     echo "  cpus:     $stress_cpus"
     echo "  workers:  $stress_workers"
-    echo "  membind:  ${stress_membind:-none}"
+    echo "  membind:  ${stress_membind}"
     IFS=',' read -ra STRESSORS <<< "$stress_type"
     stress_prefix=""
-    if [ -n "$stress_membind" ]; then
+    if [ "$stress_membind" != "none" ] && [ -n "$stress_membind" ]; then
         stress_prefix="numactl --membind=$stress_membind"
     fi
     rm -f stress-ng.pids
