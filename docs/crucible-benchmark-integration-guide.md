@@ -18,6 +18,87 @@ When in doubt about any pattern, check how uperf does it.
 
 ---
 
+## High-Level Workflow (24 Steps)
+
+The complete integration process, in the order things need to happen:
+
+1. **Study the benchmark tool** — run `--help`, capture full CLI reference,
+   understand output format, identify client-server model vs client-only,
+   determine how it terminates (duration flag, signal, etc.)
+2. **Study crucible's framework** — read `docs/implementing-a-new-benchmark.md`,
+   understand the file contract (rickshaw.json schema, workshop build stages,
+   multiplex validation, post-process CDM output)
+3. **Study an existing benchmark** — read bench-uperf end-to-end as the
+   canonical reference: file structure, role handling, getopt patterns, service
+   discovery messaging, post-process metric format
+4. **Create the bench-\<name\> repository** — on GitHub under
+   perftool-incubator, with LICENSE
+5. **Write `rickshaw.json`** — declares all scripts, file transfers, and
+   client/server structure; the manifest that tells crucible what your benchmark
+   provides
+6. **Write `workshop.json`** — build instructions to compile/install the tool
+   and its dependencies inside the container image
+7. **Write `<name>-base`** — thin shim that sources the toolbox bench-base
+   library; provides `dump_runtime`, `validate_label`, `exit_error`, metrics API
+8. **Write `<name>-server-start`** — parse params via getopt (silently skip
+   client-only params), determine server IP from interface, publish service
+   discovery message to `msgs/tx/svc`, start server in background, save PID,
+   create `<name>-start.txt` timestamp; server must NOT have a duration flag
+9. **Write `<name>-server-stop`** — read PID file, send SIGTERM (not SIGINT),
+   wait, create `<name>-stop.txt` timestamp
+10. **Write `<name>-client`** — parse params via getopt (silently skip
+    server-only params), read server address from `msgs/rx/svc` for
+    auto-discovery, create start timestamp, run tool in foreground with
+    duration, create stop timestamp
+11. **Write `<name>-get-runtime`** — extract `--duration` value from args for
+    crucible's timeout calculation
+12. **Write `multiplex.json`** — define all parameter defaults and validation
+    rules; every default must have a validation; no empty string vals (use
+    `"none"` sentinel); classify params by validation type
+13. **Write `<name>-post-process`** — parse tool output, emit CDM-compliant
+    metrics; use only allowed keys in names dict (`role`, `cmd`); encode metric
+    variants in the type string; handle 0-sample results gracefully (exit 0);
+    define `primary-metric` and `primary-period`
+14. **Local validation** — `bash -n` on all scripts, `python3 -m json.tool` on
+    all JSON, `chmod +x` on all scripts
+15. **Create a minimal run file** — single iteration, explicit `role:client` and
+    `role:server` on every param, `tags` and `tool-params` sections present,
+    real endpoint host
+16. **Register with crucible controller** — `crucible repo config add` with your
+    repo URL; use `checkout-target` for feature branches (`primary-branch` only
+    allows HEAD/main/master)
+17. **Run first smoke test** — `crucible run <run-file.json>`; check stderrout
+    logs for both roles; verify server started, client connected, results
+    produced, post-process succeeded
+18. **Debug and iterate** — fix issues found in smoke test (missing roles, wrong
+    signals, missing timestamps, CDM schema violations, getopt failures from
+    cross-role params)
+19. **Create README and example run files** — document usage, parameters,
+    standalone operation, crucible integration; include examples with CHANGEME
+    placeholders; no environment-specific numbers or hostnames
+20. **Create `config.sh`** (if applicable) — system configuration script for the
+    test host (NIC tuning, CPU isolation, namespace setup, IRQ affinity); must
+    be portable, no hardcoded values
+21. **Add stress-ng integration** (if applicable) — add stress params to
+    multiplex.json, add stress-ng lifecycle to client and server scripts, add
+    stress-ng to workshop.json deps; use `--taskset` (never external
+    `taskset -c`); use `numactl --membind` for NUMA-aware stress
+22. **Full end-to-end validation** — 2-iteration A/B run file (clean baseline
+    + one variable changed); verify both iterations complete, metrics are
+    correct, stress-ng starts/stops properly
+23. **Create PRs on bench-\<name\>** — branch protection requires PRs, no
+    direct push to main
+24. **Create PR on crucible** — add repo to `config/repos.json` for official
+    registration
+
+**Key ordering dependencies:** Steps 2–3 before anything else (understand the
+framework first). Steps 5–7 before 8–11 (manifest and build before scripts).
+Step 12 before 15 (multiplex before run files). Step 14 before 16 (validate
+before registering). Steps 17–18 are always iterative. Steps 19–21 can happen
+in any order after step 18 passes.
+
+---
+
 ## Phase 1: Pre-Integration Research
 
 Before writing any code:
