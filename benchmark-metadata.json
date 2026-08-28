@@ -1,0 +1,48 @@
+{
+  "rickshaw-benchmark-metadata": {
+    "schema": {
+      "version": "2026.08.11"
+    }
+  },
+  "benchmark": "rant",
+  "description": "Round-trip And Network Timing (rant) -- UDP network latency microbenchmark measuring sub-10 microsecond round-trip time with hardware timestamping (SO_TIMESTAMPING).",
+  "cdm_indexed": true,
+  "cdm_sources": [
+    {
+      "source": "rant",
+      "types": [
+        "round-trip-usec-p50",
+        "round-trip-usec-p90",
+        "round-trip-usec-p95",
+        "round-trip-usec-p99",
+        "round-trip-usec-p99.9",
+        "round-trip-usec-p99.99",
+        "round-trip-usec-min",
+        "round-trip-usec-max",
+        "round-trip-usec-avg",
+        "response-usec-p50",
+        "response-usec-p90",
+        "response-usec-p95",
+        "response-usec-p99",
+        "response-usec-p99.9",
+        "response-usec-p99.99",
+        "response-usec-min",
+        "response-usec-max",
+        "response-usec-avg",
+        "packets-sec"
+      ]
+    }
+  ],
+  "output_files": [
+    "rant-client-stderrout.txt",
+    "rant-client-result.txt",
+    "rant-start.txt",
+    "rant-stop.txt",
+    "rant-server-stderrout.txt",
+    "rant-server-result.txt",
+    "rant-server-stop-stderrout.txt",
+    "rant-server.pid",
+    "rant-client-log.txt",
+    "rant-server-log.txt"
+  ]
+}
