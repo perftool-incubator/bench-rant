@@ -262,3 +262,17 @@ gcc -O2 -o /usr/local/bin/rant rant.c -lm
 ```
 
 Build dependencies: `gcc`, `jq`, `bc`, `numactl`
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `rickshaw.json` | Rickshaw integration: defines client/server scripts and parameter transformations |
+| `multiplex.json` | Parameter validation rules, unit conversions, and presets for multiplex |
+| `benchmark-metadata.json` | Machine-readable description and CDM-indexed source/type list (consumed by `crucible benchmarks list`) |
+| `rant-base` | Base setup shared by other scripts |
+| `rant-client` | Client-side benchmark execution (emit) |
+| `rant-server-start` / `rant-server-stop` | Server lifecycle management (reflect) |
+| `rant-get-runtime` | Extracts runtime from command-line options |
+| `rant-post-process` | Parses rant output into crucible metrics |
+| `workshop.json` | Engine image build requirements |
